@@ -1,0 +1,1044 @@
+-- โหลด OrionLibV2
+local OrionLibV2 = loadstring(game:HttpGet("https://raw.githubusercontent.com/RainCreatorHub/OrionLibV2/refs/heads/main/OrionLibV2.lua"))()
+
+-- สร้างหน้าต่าง UI ด้วยชื่อ YANZ
+local window = OrionLibV2:MakeWindow({
+    Title = "YANZ | Flee The Facility",
+    SubTitle = "โดย zaque_blox"
+})
+
+-- เรียกใช้ Services
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local CollectionService = game:GetService("CollectionService")
+
+-- ตัวแปร RemoteEvent (กำหนดครั้งเดียวเพื่อประหยัดทรัพยากร)
+local remote = ReplicatedStorage:FindFirstChild("RemoteEvent")
+
+-- ฟังก์ชันตรวจสอบว่าโมเดลถูกต้องหรือไม่
+local function isValidModel(obj)
+    return obj:IsA("Model") and obj:FindFirstChildWhichIsA("Humanoid") and obj:FindFirstChild("HumanoidRootPart")
+end
+
+-- ฟังก์ชันแจ้งเตือน
+local function Notify(title, message, duration)
+    OrionLibV2:MakeNotification({
+        Name = title,
+        Content = message,
+        Time = duration or 5
+    })
+end
+
+-- ฟังก์ชันตรวจสอบสถานะ Beast หรือ Survivor
+local function IsBeast()
+    local character = LocalPlayer.Character
+    if character and character:FindFirstChild("BeastPowers") then
+        return true
+    end
+    return false
+end
+
+-- ฟังก์ชันตรวจสอบว่าเกมพร้อมหรือไม่
+local function IsGameReady()
+    return Workspace:FindFirstChild("Map") and #Players:GetPlayers() > 1
+end
+
+-- ======================
+-- ABA INFO
+-- ======================
+local InfoTab = window:MakeTab({ Name = "ข้อมูล" })
+local SectionInfo = InfoTab:AddSection({ Name = "ข้อมูลทั่วไป" })
+InfoTab:AddLabel({
+    Name = "ยินดีต้อนรับ " .. LocalPlayer.Name .. "!",
+    Content = "ขอบคุณที่ใช้ YANZ :D"
+})
+
+-- ======================
+-- ABA MAIN
+-- ======================
+local MainTab = window:MakeTab({ Name = "หลัก" })
+
+-- สร้างส่วนสำหรับ Survivor และ Beast
+MainTab:AddSection({ Name = "Survivor (รออัปเดต)" })
+MainTab:AddSection({ Name = "Beast" })
+
+-- ฟังก์ชัน KillAll
+local function KillAll()
+    if not remote then
+        Notify("ข้อผิดพลาด", "ไม่พบ RemoteEvent!", 5)
+        return
+    end
+
+    if not IsBeast() then
+        Notify("ข้อผิดพลาด", "คุณต้องเป็น Beast เพื่อใช้ฟังก์ชันนี้!", 5)
+        return
+    end
+
+    if not IsGameReady() then
+        Notify("ข้อผิดพลาด", "เกมยังไม่พร้อม กรุณารอ!", 5)
+        return
+    end
+
+    local character = LocalPlayer.Character
+    if not character or not character:FindFirstChild("HumanoidRootPart") then
+        Notify("ข้อผิดพลาด", "ตัวละครของคุณไม่พร้อมใช้งาน!", 5)
+        return
+    end
+
+    local originalPosition = character.HumanoidRootPart.Position
+
+    -- ค้นหาผู้เล่นที่ใกล้ที่สุด
+    local closestPlayer, closestDistance = nil, math.huge
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer and plr.Character and isValidModel(plr.Character) then
+            local distance = (character.HumanoidRootPart.Position - plr.Character.HumanoidRootPart.Position).Magnitude
+            if distance < closestDistance then
+                closestPlayer = plr
+                closestDistance = distance
+            end
+        end
+    end
+
+    if not closestPlayer then
+        Notify("ข้อผิดพลาด", "ไม่พบผู้เล่นเป้าหมาย!", 5)
+        return
+    end
+
+    -- เทเลพอร์ตไปหาผู้เล่นและโจมตี
+    character.HumanoidRootPart.CFrame = closestPlayer.Character.HumanoidRootPart.CFrame
+    task.wait(0.1)
+    remote:FireServer("Input", "Attack", true)
+    task.wait(0.1)
+
+    -- ค้นหา FreezePod ที่ว่างและใกล้ที่สุด
+    local nearestPod, nearestDistance = nil, math.huge
+    for _, pod in ipairs(CollectionService:GetTagged("FreezePod") or Workspace:GetDescendants()) do
+        if pod.Name == "FreezePod" and pod:IsA("BasePart") then
+            local isOccupied = false
+            local podPos = pod.Position
+            for _, plr in ipairs(Players:GetPlayers()) do
+                if plr ~= LocalPlayer and plr.Character and isValidModel(plr.Character) then
+                    local distance = (podPos - plr.Character.HumanoidRootPart.Position).Magnitude
+                    if distance < 5 then
+                        isOccupied = true
+                        break
+                    end
+                end
+            end
+            if not isOccupied then
+                local distance = (character.HumanoidRootPart.Position - podPos).Magnitude
+                if distance < nearestDistance then
+                    nearestPod = pod
+                    nearestDistance = distance
+                end
+            end
+        end
+    end
+
+    if not nearestPod then
+        character.HumanoidRootPart.Position = originalPosition
+        Notify("ข้อผิดพลาด", "ไม่พบ FreezePod ที่ว่าง!", 5)
+        return
+    end
+
+    -- เทเลพอร์ตไปที่ FreezePod และล็อก
+    character.HumanoidRootPart.CFrame = CFrame.new(nearestPod.Position)
+    task.wait(0.1)
+    remote:FireServer("Input", "Action", true)
+    task.wait(0.1)
+
+    -- กลับไปตำแหน่งเดิม
+    character.HumanoidRootPart.Position = originalPosition
+    Notify("สำเร็จ", "ดำเนินการ Kill All เสร็จสิ้น!", 5)
+end
+
+-- ปุ่ม Kill All
+MainTab:AddButton({
+    Name = "Kill All (Beta - อาจมีบั๊ก)",
+    Callback = KillAll
+})
+
+-- ======================
+-- AUTO KILL ALL
+-- ======================
+_G.AutoKillAllEvent = _G.AutoKillAllEvent or Instance.new("BindableEvent")
+_G.AutoKillAllCount = _G.AutoKillAllCount or 0
+local autoKillAllRunning = false
+
+-- ลูป Auto Kill All
+local function AutoKillAllLoop()
+    if not remote then
+        Notify("ข้อผิดพลาด", "ไม่พบ RemoteEvent!", 5)
+        return
+    end
+
+    if not IsBeast() then
+        Notify("ข้อผิดพลาด", "คุณต้องเป็น Beast เพื่อใช้ Auto Kill All!", 5)
+        _G.AutoKillAllCount = 0
+        _G.AutoKillAllEvent:Fire(false)
+        return
+    end
+
+    if not IsGameReady() then
+        Notify("ข้อผิดพลาด", "เกมยังไม่พร้อม กรุณารอ!", 5)
+        _G.AutoKillAllCount = 0
+        _G.AutoKillAllEvent:Fire(false)
+        return
+    end
+
+    while _G.AutoKillAllCount > 0 do
+        local character = LocalPlayer.Character
+        if character and character:FindFirstChild("HumanoidRootPart") then
+            local originalPosition = character.HumanoidRootPart.Position
+
+            -- ค้นหาผู้เล่นที่ใกล้ที่สุด
+            local closestPlayer, closestDistance = nil, math.huge
+            for _, plr in ipairs(Players:GetPlayers()) do
+                if plr ~= LocalPlayer and plr.Character and isValidModel(plr.Character) then
+                    local distance = (character.HumanoidRootPart.Position - plr.Character.HumanoidRootPart.Position).Magnitude
+                    if distance < closestDistance then
+                        closestPlayer = plr
+                        closestDistance = distance
+                    end
+                end
+            end
+
+            if closestPlayer then
+                -- เทเลพอร์ตและโจมตี
+                character.HumanoidRootPart.CFrame = closestPlayer.Character.HumanoidRootPart.CFrame
+                task.wait(0.1)
+                remote:FireServer("Input", "Attack", true)
+                task.wait(0.1)
+
+                -- ค้นหา FreezePod ที่ว่าง
+                local nearestPod, nearestDistance = nil, math.huge
+                for _, pod in ipairs(CollectionService:GetTagged("FreezePod") or Workspace:GetDescendants()) do
+                    if pod.Name == "FreezePod" and pod:IsA("BasePart") then
+                        local isOccupied = false
+                        local podPos = pod.Position
+                        for _, plr2 in ipairs(Players:GetPlayers()) do
+                            if plr2 ~= LocalPlayer and plr2.Character and isValidModel(plr2.Character) then
+                                local distance2 = (podPos - plr2.Character.HumanoidRootPart.Position).Magnitude
+                                if distance2 < 5 then
+                                    isOccupied = true
+                                    break
+                                end
+                            end
+                        end
+                        if not isOccupied then
+                            local distance3 = (character.HumanoidRootPart.Position - podPos).Magnitude
+                            if distance3 < nearestDistance then
+                                nearestPod = pod
+                                nearestDistance = distance3
+                            end
+                        end
+                    end
+                end
+
+                if nearestPod then
+                    character.HumanoidRootPart.CFrame = CFrame.new(nearestPod.Position)
+                    task.wait(0.1)
+                    remote:FireServer("Input", "Action", true)
+                    task.wait(0.1)
+                end
+
+                character.HumanoidRootPart.Position = originalPosition
+            end
+
+            task.wait(0.8) -- ปรับความเร็วลูปเพื่อลดการใช้งานทรัพยากร
+        else
+            task.wait(1)
+        end
+    end
+end
+
+-- ฟังก์ชันสลับ Auto Kill All
+local function ToggleAutoKillAll(val)
+    _G.AutoKillAllCount += val and 1 or -1
+    _G.AutoKillAllCount = math.max(0, _G.AutoKillAllCount)
+    _G.AutoKillAllEvent:Fire(_G.AutoKillAllCount > 0)
+
+    if _G.AutoKillAllCount > 0 and not autoKillAllRunning then
+        autoKillAllRunning = true
+        task.spawn(AutoKillAllLoop)
+        Notify("เปิดใช้งาน", "Auto Kill All เริ่มทำงาน!", 5)
+    else
+        autoKillAllRunning = false
+        Notify("ปิดใช้งาน", "Auto Kill All หยุดทำงาน!", 5)
+    end
+end
+
+-- สร้าง Toggle สำหรับ Auto Kill All
+local toggleAutoKillAll = MainTab:AddToggle({
+    Name = "Auto Kill All (Beta - อาจมีบั๊ก)",
+    Description = "ฆ่าผู้เล่นทั้งหมดอัตโนมัติเมื่อเป็น Beast",
+    Default = false,
+    Callback = ToggleAutoKillAll
+})
+
+_G.AutoKillAllEvent.Event:Connect(function(state)
+    if toggleAutoKillAll:Get() ~= state then
+        toggleAutoKillAll:Set(state)
+    end
+end)
+
+-- ======================
+-- ABA ESP
+-- ======================
+local EspTab = window:MakeTab({ Name = "ESP" })
+EspTab:AddSection({ Name = "ESP ไฮไลต์" })
+
+-- ตัวเลือกความเร็ว ESP
+local espUpdateSpeeds = { ["ช้า"] = 1, ["ปานกลาง"] = 0.5, ["เร็ว"] = 0.3 }
+local currentEspSpeed = "ปานกลาง"
+EspTab:AddDropdown({
+    Name = "ความเร็ว ESP",
+    Description = "ปรับความถี่การอัปเดต ESP",
+    Options = { "ช้า", "ปานกลาง", "เร็ว" },
+    Default = "ปานกลาง",
+    Callback = function(value)
+        currentEspSpeed = value
+        Notify("ตั้งค่า", "ความเร็ว ESP ถูกตั้งเป็น: " .. value, 5)
+    end
+})
+
+-- --------- COMPUTERS ESP ---------
+_G.ComputersEspEvent = _G.ComputersEspEvent or Instance.new("BindableEvent")
+_G.ComputersEspCount = _G.ComputersEspCount or 0
+local computerHighlights = {}
+
+local function UpdateComputerHighlights()
+    for _, obj in ipairs(CollectionService:GetTagged("ComputerTable") or Workspace:GetDescendants()) do
+        if obj.Name == "ComputerTable" then
+            if not computerHighlights[obj] then
+                local screen = obj:FindFirstChild("Screen")
+                if screen and screen:IsA("BasePart") then
+                    local hl = Instance.new("Highlight")
+                    hl.Name = "ComputerESP"
+                    hl.Adornee = obj
+                    hl.FillTransparency = 0.5
+                    hl.OutlineTransparency = 0
+                    hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                    hl.Parent = obj
+                    computerHighlights[obj] = hl
+                end
+            end
+
+            local screen = obj:FindFirstChild("Screen")
+            if screen and computerHighlights[obj] then
+                local hl = computerHighlights[obj]
+                hl.FillColor = screen.Color
+                hl.OutlineColor = screen.Color
+            end
+        end
+    end
+
+    for obj, hl in pairs(computerHighlights) do
+        if not obj:IsDescendantOf(Workspace) then
+            hl:Destroy()
+            computerHighlights[obj] = nil
+        end
+    end
+end
+
+local computersRunning = false
+local function ToggleComputersESP(val)
+    _G.ComputersEspCount += val and 1 or -1
+    _G.ComputersEspCount = math.max(0, _G.ComputersEspCount)
+    _G.ComputersEspEvent:Fire(_G.ComputersEspCount > 0)
+
+    if _G.ComputersEspCount > 0 and not computersRunning then
+        computersRunning = true
+        task.spawn(function()
+            while _G.ComputersEspCount > 0 do
+                if not IsGameReady() then
+                    Notify("ข้อผิดพลาด", "เกมยังไม่พร้อม กรุณารอ!", 5)
+                    break
+                end
+                UpdateComputerHighlights()
+                task.wait(espUpdateSpeeds[currentEspSpeed])
+            end
+            for _, hl in pairs(computerHighlights) do
+                hl:Destroy()
+            end
+            table.clear(computerHighlights)
+            computersRunning = false
+        end)
+        Notify("เปิดใช้งาน", "ESP คอมพิวเตอร์เริ่มทำงาน!", 5)
+    else
+        Notify("ปิดใช้งาน", "ESP คอมพิวเตอร์หยุดทำงาน!", 5)
+    end
+end
+
+local toggleComputers = EspTab:AddToggle({
+    Name = "คอมพิวเตอร์",
+    Description = "ไฮไลต์คอมพิวเตอร์ในเกม",
+    Default = false,
+    Callback = ToggleComputersESP
+})
+_G.ComputersEspEvent.Event:Connect(function(state)
+    if toggleComputers:Get() ~= state then
+        toggleComputers:Set(state)
+    end
+end)
+
+-- --------- FREEZER ESP ---------
+_G.FreezerEspEvent = _G.FreezerEspEvent or Instance.new("BindableEvent")
+_G.FreezerEspCount = _G.FreezerEspCount or 0
+local freezerHighlights = {}
+
+local function UpdateFreezerHighlights()
+    for _, pod in ipairs(CollectionService:GetTagged("FreezePod") or Workspace:GetDescendants()) do
+        if pod.Name == "FreezePod" and pod:IsA("BasePart") then
+            if not freezerHighlights[pod] then
+                local hl = Instance.new("Highlight")
+                hl.Name = "FreezerESP"
+                hl.Adornee = pod
+                hl.FillTransparency = 0.5
+                hl.OutlineTransparency = 0
+                hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                hl.Parent = pod
+                freezerHighlights[pod] = hl
+            end
+
+            local occupied = false
+            for _, plr in ipairs(Players:GetPlayers()) do
+                if plr ~= LocalPlayer and plr.Character and isValidModel(plr.Character) then
+                    local dist = (pod.Position - plr.Character.HumanoidRootPart.Position).Magnitude
+                    if dist < 5 then
+                        occupied = true
+                        break
+                    end
+                end
+            end
+
+            local hl = freezerHighlights[pod]
+            hl.FillColor = occupied and Color3.fromRGB(255, 0, 0) or Color3.fromRGB(0, 255, 0)
+            hl.OutlineColor = occupied and Color3.fromRGB(255, 0, 0) or Color3.fromRGB(0, 255, 0)
+        end
+    end
+
+    for pod, hl in pairs(freezerHighlights) do
+        if not pod:IsDescendantOf(Workspace) then
+            hl:Destroy()
+            freezerHighlights[pod] = nil
+        end
+    end
+end
+
+local freezerRunning = false
+local function ToggleFreezerESP(val)
+    _G.FreezerEspCount += val and 1 or -1
+    _G.FreezerEspCount = math.max(0, _G.FreezerEspCount)
+    _G.FreezerEspEvent:Fire(_G.FreezerEspCount > 0)
+
+    if _G.FreezerEspCount > 0 and not freezerRunning then
+        freezerRunning = true
+        task.spawn(function()
+            while _G.FreezerEspCount > 0 do
+                if not IsGameReady() then
+                    Notify("ข้อผิดพลาด", "เกมยังไม่พร้อม กรุณารอ!", 5)
+                    break
+                end
+                UpdateFreezerHighlights()
+                task.wait(espUpdateSpeeds[currentEspSpeed])
+            end
+            for _, hl in pairs(freezerHighlights) do
+                hl:Destroy()
+            end
+            table.clear(freezerHighlights)
+            freezerRunning = false
+        end)
+        Notify("เปิดใช้งาน", "ESP FreezePod เริ่มทำงาน!", 5)
+    else
+        Notify("ปิดใช้งาน", "ESP FreezePod หยุดทำงาน!", 5)
+    end
+end
+
+local toggleFreezer = EspTab:AddToggle({
+    Name = "FreezePod",
+    Description = "ไฮไลต์ FreezePod (เขียว=ว่าง, แดง=มีคน)",
+    Default = false,
+    Callback = ToggleFreezerESP
+})
+_G.FreezerEspEvent.Event:Connect(function(state)
+    if toggleFreezer:Get() ~= state then
+        toggleFreezer:Set(state)
+    end
+end)
+
+-- --------- EXIT DOORS ESP ---------
+_G.ExitEspEvent = _G.ExitEspEvent or Instance.new("BindableEvent")
+_G.ExitEspCount = _G.ExitEspCount or 0
+local exitHighlights = {}
+
+local function UpdateExitHighlights()
+    for _, door in ipairs(CollectionService:GetTagged("ExitDoor") or Workspace:GetDescendants()) do
+        if door.Name == "ExitDoor" and door:IsA("BasePart") then
+            if not exitHighlights[door] then
+                local hl = Instance.new("Highlight")
+                hl.Name = "ExitDoorESP"
+                hl.Adornee = door
+                hl.FillTransparency = 0.5
+                hl.OutlineTransparency = 0
+                hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                hl.FillColor = Color3.fromRGB(0, 255, 0)
+                hl.OutlineColor = Color3.fromRGB(0, 255, 0)
+                hl.Parent = door
+                exitHighlights[door] = hl
+            end
+        end
+    end
+
+    for door, hl in pairs(exitHighlights) do
+        if not door:IsDescendantOf(Workspace) then
+            hl:Destroy()
+            exitHighlights[door] = nil
+        end
+    end
+end
+
+local exitRunning = false
+local function ToggleExitESP(val)
+    _G.ExitEspCount += val and 1 or -1
+    _G.ExitEspCount = math.max(0, _G.ExitEspCount)
+    _G.ExitEspEvent:Fire(_G.ExitEspCount > 0)
+
+    if _G.ExitEspCount > 0 and not exitRunning then
+        exitRunning = true
+        task.spawn(function()
+            while _G.ExitEspCount > 0 do
+                if not IsGameReady() then
+                    Notify("ข้อผิดพลาด", "เกมยังไม่พร้อม กรุณารอ!", 5)
+                    break
+                end
+                UpdateExitHighlights()
+                task.wait(espUpdateSpeeds[currentEspSpeed])
+            end
+            for _, hl in pairs(exitHighlights) do
+                hl:Destroy()
+            end
+            table.clear(exitHighlights)
+            exitRunning = false
+        end)
+        Notify("เปิดใช้งาน", "ESP ทางออกเริ่มทำงาน!", 5)
+    else
+        Notify("ปิดใช้งาน", "ESP ทางออกหยุดทำงาน!", 5)
+    end
+end
+
+local toggleExit = EspTab:AddToggle({
+    Name = "ประตูทางออก",
+    Description = "ไฮไลต์ประตูทางออก",
+    Default = false,
+    Callback = ToggleExitESP
+})
+_G.ExitEspEvent.Event:Connect(function(state)
+    if toggleExit:Get() ~= state then
+        toggleExit:Set(state)
+    end
+end)
+
+-- --------- PLAYERS ESP ---------
+_G.PlayersEspEvent = _G.PlayersEspEvent or Instance.new("BindableEvent")
+_G.PlayersEspCount = _G.PlayersEspCount or 0
+local playerHighlights = {}
+
+local function HasHammer(player)
+    local char = Workspace:FindFirstChild(player.Name)
+    return char and char:FindFirstChild("Hammer") ~= nil
+end
+
+local function UpdatePlayerHighlights()
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer then
+            local char = Workspace:FindFirstChild(plr.Name)
+            if char and isValidModel(char) then
+                if not playerHighlights[plr] then
+                    local hl = Instance.new("Highlight")
+                    hl.Name = "PlayerESP"
+                    hl.Adornee = char
+                    hl.FillTransparency = 0.5
+                    hl.OutlineTransparency = 0
+                    hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                    hl.Parent = char
+                    playerHighlights[plr] = hl
+                else
+                    playerHighlights[plr].Adornee = char
+                end
+
+                local color = HasHammer(plr) and Color3.fromRGB(255, 0, 0) or Color3.fromRGB(0, 255, 0)
+                local hl = playerHighlights[plr]
+                hl.FillColor = color
+                hl.OutlineColor = color
+            end
+        end
+    end
+
+    for plr, hl in pairs(playerHighlights) do
+        if not Players:FindFirstChild(plr.Name) or not Workspace:FindFirstChild(plr.Name) then
+            hl:Destroy()
+            playerHighlights[plr] = nil
+        end
+    end
+end
+
+local playerEspRunning = false
+local function TogglePlayersESP(val)
+    _G.PlayersEspCount += val and 1 or -1
+    _G.PlayersEspCount = math.max(0, _G.PlayersEspCount)
+    _G.PlayersEspEvent:Fire(_G.PlayersEspCount > 0)
+
+    if _G.PlayersEspCount > 0 and not playerEspRunning then
+        playerEspRunning = true
+        task.spawn(function()
+            while _G.PlayersEspCount > 0 do
+                if not IsGameReady() then
+                    Notify("ข้อผิดพลาด", "เกมยังไม่พร้อม กรุณารอ!", 5)
+                    break
+                end
+                UpdatePlayerHighlights()
+                task.wait(espUpdateSpeeds[currentEspSpeed])
+            end
+            for _, hl in pairs(playerHighlights) do
+                hl:Destroy()
+            end
+            table.clear(playerHighlights)
+            playerEspRunning = false
+        end)
+        Notify("เปิดใช้งาน", "ESP ผู้เล่นเริ่มทำงาน!", 5)
+    else
+        Notify("ปิดใช้งาน", "ESP ผู้เล่นหยุดทำงาน!", 5)
+    end
+end
+
+local togglePlayers = EspTab:AddToggle({
+    Name = "ผู้เล่น",
+    Description = "ไฮไลต์ผู้เล่น (แดง=มีค้อน, เขียว=ไม่มีค้อน)",
+    Default = false,
+    Callback = TogglePlayersESP
+})
+_G.PlayersEspEvent.Event:Connect(function(state)
+    if togglePlayers:Get() ~= state then
+        togglePlayers:Set(state)
+    end
+end)
+
+-- --------- HAMMER ESP ---------
+_G.HammerEspEvent = _G.HammerEspEvent or Instance.new("BindableEvent")
+_G.HammerEspCount = _G.HammerEspCount or 0
+local hammerHighlights = {}
+
+local function UpdateHammerHighlights()
+    for _, hammer in ipairs(CollectionService:GetTagged("Hammer") or Workspace:GetDescendants()) do
+        if hammer.Name == "Hammer" and hammer:IsA("BasePart") and not hammer.Parent:IsA("Model") then
+            if not hammerHighlights[hammer] then
+                local hl = Instance.new("Highlight")
+                hl.Name = "HammerESP"
+                hl.Adornee = hammer
+                hl.FillTransparency = 0.5
+                hl.OutlineTransparency = 0
+                hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                hl.FillColor = Color3.fromRGB(255, 215, 0) -- สีเหลืองทอง
+                hl.OutlineColor = Color3.fromRGB(255, 215, 0)
+                hl.Parent = hammer
+                hammerHighlights[hammer] = hl
+            end
+        end
+    end
+
+    for hammer, hl in pairs(hammerHighlights) do
+        if not hammer:IsDescendantOf(Workspace) or hammer.Parent:IsA("Model") then
+            hl:Destroy()
+            hammerHighlights[hammer] = nil
+        end
+    end
+end
+
+local hammerRunning = false
+local function ToggleHammerESP(val)
+    _G.HammerEspCount += val and 1 or -1
+    _G.HammerEspCount = math.max(0, _G.HammerEspCount)
+    _G.HammerEspEvent:Fire(_G.HammerEspCount > 0)
+
+    if _G.HammerEspCount > 0 and not hammerRunning then
+        hammerRunning = true
+        task.spawn(function()
+            while _G.HammerEspCount > 0 do
+                if not IsGameReady() then
+                    Notify("ข้อผิดพลาด", "เกมยังไม่พร้อม กรุณารอ!", 5)
+                    break
+                end
+                UpdateHammerHighlights()
+                task.wait(espUpdateSpeeds[currentEspSpeed])
+            end
+            for _, hl in pairs(hammerHighlights) do
+                hl:Destroy()
+            end
+            table.clear(hammerHighlights)
+            hammerRunning = false
+        end)
+        Notify("เปิดใช้งาน", "ESP ค้อนเริ่มทำงาน!", 5)
+    else
+        Notify("ปิดใช้งาน", "ESP ค้อนหยุดทำงาน!", 5)
+    end
+end
+
+local toggleHammer = EspTab:AddToggle({
+    Name = "ค้อน (Hammer)",
+    Description = "ไฮไลต์ค้อนในแผนที่ (สีเหลือง)",
+    Default = false,
+    Callback = ToggleHammerESP
+})
+_G.HammerEspEvent.Event:Connect(function(state)
+    if toggleHammer:Get() ~= state then
+        toggleHammer:Set(state)
+    end
+end)
+
+-- --------- GEMSTONE ESP ---------
+_G.GemstoneEspEvent = _G.GemstoneEspEvent or Instance.new("BindableEvent")
+_G.GemstoneEspCount = _G.GemstoneEspCount or 0
+local gemstoneHighlights = {}
+
+local function UpdateGemstoneHighlights()
+    for _, gemstone in ipairs(CollectionService:GetTagged("Gemstone") or Workspace:GetDescendants()) do
+        if gemstone.Name == "Gemstone" and gemstone:IsA("BasePart") then
+            if not gemstoneHighlights[gemstone] then
+                local hl = Instance.new("Highlight")
+                hl.Name = "GemstoneESP"
+                hl.Adornee = gemstone
+                hl.FillTransparency = 0.5
+                hl.OutlineTransparency = 0
+                hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                hl.FillColor = Color3.fromRGB(0, 255, 255) -- สีฟ้า
+                hl.OutlineColor = Color3.fromRGB(0, 255, 255)
+                hl.Parent = gemstone
+                gemstoneHighlights[gemstone] = hl
+            end
+        end
+    end
+
+    for gemstone, hl in pairs(gemstoneHighlights) do
+        if not gemstone:IsDescendantOf(Workspace) then
+            hl:Destroy()
+            gemstoneHighlights[gemstone] = nil
+        end
+    end
+end
+
+local gemstoneRunning = false
+local function ToggleGemstoneESP(val)
+    _G.GemstoneEspCount += val and 1 or -1
+    _G.GemstoneEspCount = math.max(0, _G.GemstoneEspCount)
+    _G.GemstoneEspEvent:Fire(_G.GemstoneEspCount > 0)
+
+    if _G.GemstoneEspCount > 0 and not gemstoneRunning then
+        gemstoneRunning = true
+        task.spawn(function()
+            while _G.GemstoneEspCount > 0 do
+                if not IsGameReady() then
+                    Notify("ข้อผิดพลาด", "เกมยังไม่พร้อม กรุณารอ!", 5)
+                    break
+                end
+                UpdateGemstoneHighlights()
+                task.wait(espUpdateSpeeds[currentEspSpeed])
+            end
+            for _, hl in pairs(gemstoneHighlights) do
+                hl:Destroy()
+            end
+            table.clear(gemstoneHighlights)
+            gemstoneRunning = false
+        end)
+        Notify("เปิดใช้งาน", "ESP อัญมณีเริ่มทำงาน!", 5)
+    else
+        Notify("ปิดใช้งาน", "ESP อัญมณีหยุดทำงาน!", 5)
+    end
+end
+
+local toggleGemstone = EspTab:AddToggle({
+    Name = "อัญมณี (Gemstone)",
+    Description = "ไฮไลต์อัญมณีในแผนที่ (สีฟ้า)",
+    Default = false,
+    Callback = ToggleGemstoneESP
+})
+_G.GemstoneEspEvent.Event:Connect(function(state)
+    if toggleGemstone:Get() ~= state then
+        toggleGemstone:Set(state)
+    end
+end)
+
+-- --------- KEYCARD ESP ---------
+_G.KeycardEspEvent = _G.KeycardEspEvent or Instance.new("BindableEvent")
+_G.KeycardEspCount = _G.KeycardEspCount or 0
+local keycardHighlights = {}
+
+local function UpdateKeycardHighlights()
+    local foundKeycard = false
+    for _, keycard in ipairs(CollectionService:GetTagged("Keycard") or Workspace:GetDescendants()) do
+        if keycard.Name == "Keycard" and keycard:IsA("BasePart") then
+            foundKeycard = true
+            if not keycardHighlights[keycard] then
+                local hl = Instance.new("Highlight")
+                hl.Name = "KeycardESP"
+                hl.Adornee = keycard
+                hl.FillTransparency = 0.5
+                hl.OutlineTransparency = 0
+                hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                hl.FillColor = Color3.fromRGB(128, 0, 128) -- สีม่วง
+                hl.OutlineColor = Color3.fromRGB(128, 0, 128)
+                hl.Parent = keycard
+                keycardHighlights[keycard] = hl
+            end
+        end
+    end
+
+    for keycard, hl in pairs(keycardHighlights) do
+        if not keycard:IsDescendantOf(Workspace) then
+            hl:Destroy()
+            keycardHighlights[keycard] = nil
+        end
+    end
+
+    if _G.KeycardEspCount > 0 and not foundKeycard then
+        Notify("คำเตือน", "ไม่พบ Keycard ในแผนที่!", 5)
+    end
+end
+
+local keycardRunning = false
+local function ToggleKeycardESP(val)
+    _G.KeycardEspCount += val and 1 or -1
+    _G.KeycardEspCount = math.max(0, _G.KeycardEspCount)
+    _G.KeycardEspEvent:Fire(_G.KeycardEspCount > 0)
+
+    if _G.KeycardEspCount > 0 and not keycardRunning then
+        keycardRunning = true
+        task.spawn(function()
+            while _G.KeycardEspCount > 0 do
+                if not IsGameReady() then
+                    Notify("ข้อผิดพลาด", "เกมยังไม่พร้อม กรุณารอ!", 5)
+                    break
+                end
+                UpdateKeycardHighlights()
+                task.wait(espUpdateSpeeds[currentEspSpeed])
+            end
+            for _, hl in pairs(keycardHighlights) do
+                hl:Destroy()
+            end
+            table.clear(keycardHighlights)
+            keycardRunning = false
+        end)
+        Notify("เปิดใช้งาน", "ESP Keycard เริ่มทำงาน!", 5)
+    else
+        Notify("ปิดใช้งาน", "ESP Keycard หยุดทำงาน!", 5)
+    end
+end
+
+local toggleKeycard = EspTab:AddToggle({
+    Name = "Keycard",
+    Description = "ไฮไลต์ Keycard ในแผนที่ (สีม่วง) - อาจใช้ในอีเวนต์",
+    Default = false,
+    Callback = ToggleKeycardESP
+})
+_G.KeycardEspEvent.Event:Connect(function(state)
+    if toggleKeycard:Get() ~= state then
+        toggleKeycard:Set(state)
+    end
+end)
+
+-- --------- GENERIC ITEM ESP ---------
+_G.ItemEspEvent = _G.ItemEspEvent or Instance.new("BindableEvent")
+_G.ItemEspCount = _G.ItemEspCount or 0
+local itemHighlights = {}
+
+local function UpdateItemHighlights()
+    local foundItem = false
+    for _, item in ipairs(CollectionService:GetTagged("Collectible") or Workspace:GetDescendants()) do
+        if item:IsA("BasePart") and (item.Name:match("Item") or item.Name:match("Collectible")) and not item.Parent:IsA("Model") then
+            foundItem = true
+            if not itemHighlights[item] then
+                local hl = Instance.new("Highlight")
+                hl.Name = "ItemESP"
+                hl.Adornee = item
+                hl.FillTransparency = 0.5
+                hl.OutlineTransparency = 0
+                hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                hl.FillColor = Color3.fromRGB(255, 165, 0) -- สีส้ม
+                hl.OutlineColor = Color3.fromRGB(255, 165, 0)
+                hl.Parent = item
+                itemHighlights[item] = hl
+            end
+        end
+    end
+
+    for item, hl in pairs(itemHighlights) do
+        if not item:IsDescendantOf(Workspace) then
+            hl:Destroy()
+            itemHighlights[item] = nil
+        end
+    end
+
+    if _G.ItemEspCount > 0 and not foundItem then
+        Notify("คำเตือน", "ไม่พบไอเทมทั่วไปในแผนที่!", 5)
+    end
+end
+
+local itemRunning = false
+local function ToggleItemESP(val)
+    _G.ItemEspCount += val and 1 or -1
+    _G.ItemEspCount = math.max(0, _G.ItemEspCount)
+    _G.ItemEspEvent:Fire(_G.ItemEspCount > 0)
+
+    if _G.ItemEspCount > 0 and not itemRunning then
+        itemRunning = true
+        task.spawn(function()
+            while _G.ItemEspCount > 0 do
+                if not IsGameReady() then
+                    Notify("ข้อผิดพลาด", "เกมยังไม่พร้อม กรุณารอ!", 5)
+                    break
+                end
+                UpdateItemHighlights()
+                task.wait(espUpdateSpeeds[currentEspSpeed])
+            end
+            for _, hl in pairs(itemHighlights) do
+                hl:Destroy()
+            end
+            table.clear(itemHighlights)
+            itemRunning = false
+        end)
+        Notify("เปิดใช้งาน", "ESP ไอเทมทั่วไปเริ่มทำงาน!", 5)
+    else
+        Notify("ปิดใช้งาน", "ESP ไอเทมทั่วไปหยุดทำงาน!", 5)
+    end
+end
+
+local toggleItem = EspTab:AddToggle({
+    Name = "ไอเทมทั่วไป",
+    Description = "ไฮไลต์ไอเทมทั่วไปในแผนที่ (สีส้ม) - รวมถึงอีเวนต์",
+    Default = false,
+    Callback = ToggleItemESP
+})
+_G.ItemEspEvent.Event:Connect(function(state)
+    if toggleItem:Get() ~= state then
+        toggleItem:Set(state)
+    end
+end)
+
+-- ======================
+-- ABA TOOLS
+-- ======================
+local ToolsTab = window:MakeTab({ Name = "เครื่องมือ" })
+ToolsTab:AddSection({ Name = "เครื่องมือสำหรับ Survivor" })
+
+-- --------- ANTI FAIL ---------
+_G.AntiFailEvent = _G.AntiFailEvent or Instance.new("BindableEvent")
+_G.AntiFailCount = _G.AntiFailCount or 0
+local antiFailRunning = false
+
+local function NoFailLoop()
+    if not remote then
+        Notify("ข้อผิดพลาด", "ไม่พบ RemoteEvent!", 5)
+        return
+    end
+    while _G.AntiFailCount > 0 do
+        remote:FireServer("SetPlayerMinigameResult", true)
+        task.wait(0.1)
+    end
+end
+
+local function ToggleAntiFail(val)
+    if val and IsBeast() then
+        Notify("ข้อผิดพลาด", "Anti Fail ใช้ได้เฉพาะ Survivor!", 5)
+        return
+    end
+
+    if not IsGameReady() then
+        Notify("ข้อผิดพลาด", "เกมยังไม่พร้อม กรุณารอ!", 5)
+        return
+    end
+
+    _G.AntiFailCount += val and 1 or -1
+    _G.AntiFailCount = math.max(0, _G.AntiFailCount)
+    _G.AntiFailEvent:Fire(_G.AntiFailCount > 0)
+
+    if _G.AntiFailCount > 0 and not antiFailRunning then
+        antiFailRunning = true
+        task.spawn(NoFailLoop)
+        Notify("เปิดใช้งาน", "Anti Fail เริ่มทำงาน!", 5)
+    else
+        antiFailRunning = false
+        Notify("ปิดใช้งาน", "Anti Fail หยุดทำงาน!", 5)
+    end
+end
+
+local toggleAntiFail = ToolsTab:AddToggle({
+    Name = "Anti Fail",
+    Description = "ป้องกันการล้มเหลวในมินิเกมคอมพิวเตอร์ (กด E)",
+    Default = false,
+    Callback = ToggleAntiFail
+})
+
+_G.AntiFailEvent.Event:Connect(function(state)
+    if toggleAntiFail:Get() ~= state then
+        toggleAntiFail:Set(state)
+    end
+end)
+
+-- --------- AUTO INTERACT ---------
+_G.AutoInteractEvent = _G.AutoInteractEvent or Instance.new("BindableEvent")
+_G.AutoInteractCount = _G.AutoInteractCount or 0
+local autoInteractRunning = false
+
+local function AutoInteractLoop()
+    if not remote then
+        Notify("ข้อผิดพลาด", "ไม่พบ RemoteEvent!", 5)
+        return
+    end
+    while _G.AutoInteractCount > 0 do
+        remote:FireServer("Input", "Action", true)
+        task.wait(0.1)
+    end
+end
+
+local function ToggleAutoInteract(val)
+    if val and IsBeast() then
+        Notify("ข้อผิดพลาด", "Auto Interact ใช้ได้เฉพาะ Survivor!", 5)
+        return
+    end
+
+    if not IsGameReady() then
+        Notify("ข้อผิดพลาด", "เกมยังไม่พร้อม กรุณารอ!", 5)
+        return
+    end
+
+    _G.AutoInteractCount += val and 1 or -1
+    _G.AutoInteractCount = math.max(0, _G.AutoInteractCount)
+    _G.AutoInteractEvent:Fire(_G.AutoInteractCount > 0)
+
+    if _G.AutoInteractCount > 0 and not autoInteractRunning then
+        autoInteractRunning = true
+        task.spawn(AutoInteractLoop)
+        Notify("เปิดใช้งาน", "Auto Interact เริ่มทำงาน!", 5)
+    else
+        autoInteractRunning = false
+        Notify("ปิดใช้งาน", "Auto Interact หยุดทำงาน!", 5)
+    end
+end
+
+local toggleAutoInteract = ToolsTab:AddToggle({
+    Name = "Auto Interact",
+    Description = "โต้ตอบอัตโนมัติ (เช่น เปิดประตู, ใช้คอมพิวเตอร์)",
+    Default = false,
+    Callback = ToggleAutoInteract
+})
+
+_G.AutoInteractEvent.Event:Connect(function(state)
+    if toggleAutoInteract:Get() ~= state then
+        toggleAutoInteract:Set(state)
+    end
+end)
+
+-- แจ้งเตือนเมื่อสคริปต์เริ่มทำงาน
+Notify("YANZ", "สคริปต์ YANZ โหลดสำเร็จ! พร้อมใช้งาน", 5)
