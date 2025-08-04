@@ -1,28 +1,22 @@
--- โหลด OrionLibV2
 local OrionLibV2 = loadstring(game:HttpGet("https://raw.githubusercontent.com/RainCreatorHub/OrionLibV2/refs/heads/main/OrionLibV2.lua"))()
 
--- สร้างหน้าต่าง UI ด้วยชื่อ YANZ
 local window = OrionLibV2:MakeWindow({
     Title = "YANZ | Flee The Facility",
-    SubTitle = "โดย zaque_blox"
+    SubTitle = "By YANZ V5"
 })
 
--- เรียกใช้ Services
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local CollectionService = game:GetService("CollectionService")
 
--- ตัวแปร RemoteEvent (กำหนดครั้งเดียวเพื่อประหยัดทรัพยากร)
 local remote = ReplicatedStorage:FindFirstChild("RemoteEvent")
 
--- ฟังก์ชันตรวจสอบว่าโมเดลถูกต้องหรือไม่
 local function isValidModel(obj)
     return obj:IsA("Model") and obj:FindFirstChildWhichIsA("Humanoid") and obj:FindFirstChild("HumanoidRootPart")
 end
 
--- ฟังก์ชันแจ้งเตือน
 local function Notify(title, message, duration)
     OrionLibV2:MakeNotification({
         Name = title,
@@ -31,7 +25,6 @@ local function Notify(title, message, duration)
     })
 end
 
--- ฟังก์ชันตรวจสอบสถานะ Beast หรือ Survivor
 local function IsBeast()
     local character = LocalPlayer.Character
     if character and character:FindFirstChild("BeastPowers") then
@@ -40,7 +33,6 @@ local function IsBeast()
     return false
 end
 
--- ฟังก์ชันตรวจสอบว่าเกมพร้อมหรือไม่
 local function IsGameReady()
     return Workspace:FindFirstChild("Map") and #Players:GetPlayers() > 1
 end
@@ -1041,4 +1033,4 @@ _G.AutoInteractEvent.Event:Connect(function(state)
 end)
 
 -- แจ้งเตือนเมื่อสคริปต์เริ่มทำงาน
-Notify("YANZ", "สคริปต์ YANZ โหลดสำเร็จ! พร้อมใช้งาน", 5)
+Notify("YANZ", "YANZ script successfully loaded! Ready to use.", 5)
